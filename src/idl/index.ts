@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import type {} from "@coral-xyz/anchor";
-import type { IdlTypeDef, IdlType } from "@coral-xyz/anchor/dist/cjs/idl.js";
+import type { IdlTypeDef, IdlType, Idl } from "@coral-xyz/anchor/dist/cjs/idl.js";
+import { createHash } from "crypto";
 
 export const parseIdl = (args: { filePath: string }) => {
   const rawIdl = fs.readFileSync(args.filePath, "utf-8");
@@ -17,16 +18,14 @@ export type TypeMap = Map<string, IdlTypeDef>;
 export const mapType = (
   type: IdlType,
   typesMap: TypeMap,
-  nullable: boolean = false
+  nullable: boolean = false,
 ): ColumnDefinition => {
   if (type === "bool") return { sqlType: "BOOLEAN", nullable };
   if (type === "u8" || type === "i8") return { sqlType: "SMALLINT", nullable };
-  if (type === "u16" || type === "i16")
-    return { sqlType: "SMALLINT", nullable };
+  if (type === "u16" || type === "i16") return { sqlType: "SMALLINT", nullable };
   if (type === "u32" || type === "i32") return { sqlType: "INTEGER", nullable };
   if (type === "u64" || type === "i64") return { sqlType: "BIGINT", nullable };
-  if (type === "u128" || type === "i128")
-    return { sqlType: "NUMERIC(39,0)", nullable }; // too big for BIGINT
+  if (type === "u128" || type === "i128") return { sqlType: "NUMERIC(39,0)", nullable }; // too big for BIGINT
   if (type === "f32") return { sqlType: "REAL", nullable };
   if (type === "f64") return { sqlType: "DOUBLE PRECISION", nullable };
   if (type === "string") return { sqlType: "TEXT", nullable };
@@ -48,24 +47,19 @@ export const mapType = (
 
     if ("defined" in type) {
       // anchor v0.30+ uses { name: string }
-      const typeName =
-        typeof type.defined === "string" ? type.defined : type.defined.name;
+      const typeName = typeof type.defined === "string" ? type.defined : type.defined.name;
 
       const resolved = typesMap.get(typeName);
 
       if (!resolved) {
-        console.warn(
-          `Unknown defined type: ${typeName}, falling back to JSONB`
-        );
+        console.warn(`Unknown defined type: ${typeName}, falling back to JSONB`);
         return { sqlType: "JSONB", nullable };
       }
 
       const kind = resolved.type.kind;
 
       if (kind === "enum") {
-        const hasData = resolved.type.variants.some(
-          (v) => v.fields && v.fields.length > 0
-        );
+        const hasData = resolved.type.variants.some((v) => v.fields && v.fields.length > 0);
 
         if (hasData) {
           return { sqlType: "JSONB", nullable };
@@ -80,9 +74,7 @@ export const mapType = (
     }
   }
 
-  console.warn(
-    `Unhandled type: ${JSON.stringify(type)}, falling back to JSONB`
-  );
+  console.warn(`Unhandled type: ${JSON.stringify(type)}, falling back to JSONB`);
 
   return { sqlType: "JSONB", nullable };
 };
@@ -92,6 +84,18 @@ export const buildTypesMap = (types: IdlTypeDef[]): Map<string, IdlTypeDef> => {
 
   for (const type of types) {
     map.set(type.name, type);
+  }
+
+  return map;
+};
+
+export const buildDiscriminatorMap = (idl: Idl) => {
+  const map = new Map<string, string>();
+
+  for (const ix of idl.instructions) {
+    const hash = createHash("sha256").update(`global:${ix.name}`).digest();
+    const discriminator = hash.slice(0, 8).toString("hex");
+    map.set(discriminator, ix.name);
   }
 
   return map;

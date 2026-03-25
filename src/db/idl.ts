@@ -1,11 +1,11 @@
 import { mapType, type TypeMap } from "@/idl/index.js";
 import { toSnakeCase } from "drizzle-orm/casing";
 import type { Idl } from "@coral-xyz/anchor";
-import type {  IdlField,  IdlType } from "@coral-xyz/anchor/dist/cjs/idl.js";
+import type { IdlField, IdlType } from "@coral-xyz/anchor/dist/cjs/idl.js";
 
 export const buildAccountTables = (
   accounts: NonNullable<Idl["accounts"]>,
-  typesMap: TypeMap
+  typesMap: TypeMap,
 ): string[] => {
   const sqlStatements: string[] = [];
 
@@ -37,22 +37,15 @@ export const buildAccountTables = (
     for (const field of fields) {
       // `fields` can be `IdlField[]` (named struct) or `IdlType[]` (tuple struct).
       // Tuple struct fields don't have a top-level `name`, so we skip them here.
-      const isValid = typeof field === "object" && field !== null && "name" in field
-      if(!isValid) {
-        continue
+      const isValid = typeof field === "object" && field !== null && "name" in field;
+      if (!isValid) {
+        continue;
       }
 
       const idlField = field as IdlField;
-      const { sqlType, nullable } = mapType(
-        idlField.type as IdlType,
-        typesMap
-      );
+      const { sqlType, nullable } = mapType(idlField.type as IdlType, typesMap);
 
-      columns.push(
-        `${toSnakeCase(idlField.name)} ${sqlType}${
-          nullable ? "" : " NOT NULL"
-        }`
-      );
+      columns.push(`${toSnakeCase(idlField.name)} ${sqlType}${nullable ? "" : " NOT NULL"}`);
     }
 
     sqlStatements.push(`
@@ -67,7 +60,7 @@ export const buildAccountTables = (
 
 export const buildInstructionTables = (
   instructions: Idl["instructions"],
-  typesMap: TypeMap
+  typesMap: TypeMap,
 ): string[] => {
   const sqlStatements: string[] = [];
 
@@ -86,9 +79,7 @@ export const buildInstructionTables = (
     // args are always IdlField[] so no tuple check needed
     for (const arg of ix.args) {
       const { sqlType, nullable } = mapType(arg.type as IdlType, typesMap);
-      columns.push(
-        `${toSnakeCase(arg.name)} ${sqlType}${nullable ? "" : " NOT NULL"}`
-      );
+      columns.push(`${toSnakeCase(arg.name)} ${sqlType}${nullable ? "" : " NOT NULL"}`);
     }
 
     sqlStatements.push(`
