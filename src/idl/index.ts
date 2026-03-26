@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { logger } from "@/logger.js";
 import type {} from "@coral-xyz/anchor";
 import type { IdlTypeDef, IdlType, Idl } from "@coral-xyz/anchor/dist/cjs/idl.js";
 import { createHash } from "crypto";
@@ -52,7 +53,7 @@ export const mapType = (
       const resolved = typesMap.get(typeName);
 
       if (!resolved) {
-        console.warn(`Unknown defined type: ${typeName}, falling back to JSONB`);
+        logger.warn({ typeName }, "Unknown defined type, falling back to JSONB");
         return { sqlType: "JSONB", nullable };
       }
 
@@ -74,7 +75,7 @@ export const mapType = (
     }
   }
 
-  console.warn(`Unhandled type: ${JSON.stringify(type)}, falling back to JSONB`);
+  logger.warn({ type }, "Unhandled type, falling back to JSONB");
 
   return { sqlType: "JSONB", nullable };
 };
@@ -96,6 +97,18 @@ export const buildDiscriminatorMap = (idl: Idl) => {
     const hash = createHash("sha256").update(`global:${ix.name}`).digest();
     const discriminator = hash.slice(0, 8).toString("hex");
     map.set(discriminator, ix.name);
+  }
+
+  return map;
+};
+
+export const buildAccountDiscriminatorMap = (idl: Idl) => {
+  const map = new Map<string, string>();
+
+  for (const account of idl.accounts ?? []) {
+    const hash = createHash("sha256").update(`account:${account.name}`).digest();
+    const discriminator = hash.slice(0, 8).toString("hex");
+    map.set(discriminator, account.name);
   }
 
   return map;

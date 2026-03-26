@@ -6,6 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   DATABASE_URL: z.url(),
   RPC_URL: z.url(),
+  WS_URL: z.url(),
 });
 
 const envParsed = envSchema.safeParse(process.env);
