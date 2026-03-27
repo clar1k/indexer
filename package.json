@@ -1,12 +1,16 @@
 {
   "name": "indexer",
   "type": "module",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "indexer:test": "tsx src/indexer/index.ts",
     "setup": "tsx src/setup.ts",
     "dev": "tsx watch src/main.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "tsx src/main.ts",
+    "start:api": "tsx src/main.ts",
+    "start:indexer": "tsx src/indexer/index.ts",
+    "start:setup": "tsx src/setup.ts",
     "fmt": "oxfmt",
     "test": "node --import tsx --test test/**/*.test.ts src/**/*.test.ts"
   },
@@ -21,6 +25,7 @@
     "@solana/kit": "^6.5.0",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.12.9",
