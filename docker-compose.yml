@@ -15,50 +15,25 @@ services:
       timeout: 5s
       retries: 20
 
-  setup:
+  app:
     build:
       context: .
     environment:
+      APP_PORT: ${APP_PORT:-3000}
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/indexer
+      INDEXER_ENABLED: ${INDEXER_ENABLED:-true}
+      INDEXER_MODE: ${INDEXER_MODE:-realtime}
+      PROGRAM_IDL_PATH: ${PROGRAM_IDL_PATH:-/app/idl.json}
       RPC_URL: ${RPC_URL:?Set RPC_URL in your shell or .env before running docker compose}
       WS_URL: ${WS_URL:?Set WS_URL in your shell or .env before running docker compose}
-      IDL_PATH: ${IDL_PATH:-/app/idl.json}
-    command: ["sh", "-c", "pnpm start:setup \"$$IDL_PATH\""]
+      BACKFILL_SIGNATURES: ${BACKFILL_SIGNATURES:-}
+      BACKFILL_SLOT_FROM: ${BACKFILL_SLOT_FROM:-}
+      BACKFILL_SLOT_TO: ${BACKFILL_SLOT_TO:-}
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
-
-  api:
-    build:
-      context: .
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/indexer
-      RPC_URL: ${RPC_URL:?Set RPC_URL in your shell or .env before running docker compose}
-      WS_URL: ${WS_URL:?Set WS_URL in your shell or .env before running docker compose}
-      PORT: ${PORT:-3000}
-    command: ["pnpm", "start:api"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      setup:
-        condition: service_completed_successfully
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
-
-  indexer:
-    build:
-      context: .
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/indexer
-      RPC_URL: ${RPC_URL:?Set RPC_URL in your shell or .env before running docker compose}
-      WS_URL: ${WS_URL:?Set WS_URL in your shell or .env before running docker compose}
-    command: ["pnpm", "start:indexer", "--mode", "${INDEXER_MODE:-realtime}"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      setup:
-        condition: service_completed_successfully
+      - "${APP_PORT:-3000}:${APP_PORT:-3000}"
 
 volumes:
   postgres-data:

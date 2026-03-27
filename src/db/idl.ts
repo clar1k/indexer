@@ -3,6 +3,7 @@ import { logger } from "@/logger.js";
 import { toSnakeCase } from "drizzle-orm/casing";
 import type { Idl } from "@coral-xyz/anchor";
 import type { IdlField, IdlType } from "@coral-xyz/anchor/dist/cjs/idl.js";
+import { buildTypesMap } from "@/idl/index.js";
 import { db } from "@/db/index.js";
 import { sql } from "drizzle-orm";
 
@@ -107,6 +108,27 @@ export const buildInstructionTables = (
   }
 
   return sqlStatements;
+};
+
+export const generateDynamicSchemaSql = (idl: Idl) => {
+  const typesMap = buildTypesMap(idl.types ?? []);
+  const accounts = idl.accounts ?? [];
+  const instructions = idl.instructions;
+
+  return [
+    ...buildAccountTables(accounts, typesMap),
+    ...buildInstructionTables(instructions, typesMap),
+  ].join("\n");
+};
+
+export const ensureDynamicSchema = async ({ idl }: { idl: Idl }) => {
+  const schemaSql = generateDynamicSchemaSql(idl);
+
+  if (schemaSql.trim().length === 0) {
+    return;
+  }
+
+  await db.execute(sql.raw(schemaSql));
 };
 
 interface DecodedInstruction {

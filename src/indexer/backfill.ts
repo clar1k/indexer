@@ -26,10 +26,7 @@ type BackfillOptions =
       toInclusive?: never;
     };
 
-export const runBackfill = async ({
-  abortSignal,
-  ...options
-}: BackfillOptions) => {
+export const runBackfill = async ({ abortSignal, ...options }: BackfillOptions) => {
   const { programId, runtime } = options;
 
   if ("signatures" in options) {

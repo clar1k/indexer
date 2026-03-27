@@ -25,8 +25,7 @@ const isWritableAccountIndex = ({
   }
 
   if (accountIndex < staticAccountCount) {
-    const signedWritableCount =
-      header.numRequiredSignatures - header.numReadonlySignedAccounts;
+    const signedWritableCount = header.numRequiredSignatures - header.numReadonlySignedAccounts;
 
     if (accountIndex < header.numRequiredSignatures) {
       return accountIndex < signedWritableCount;

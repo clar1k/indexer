@@ -1,6 +1,6 @@
-import { env } from "@/env.js";
+import { getConfig } from "@/env.js";
 import type { Idl } from "@coral-xyz/anchor";
-import { desc, eq, getTableName, sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { bigint, jsonb, pgTable, timestamp, varchar } from "drizzle-orm/pg-core";
 
@@ -20,7 +20,9 @@ export const programIndexerState = pgTable("program_indexer_state", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const db = drizzle(env.DATABASE_URL, {
+const config = getConfig();
+
+export const db = drizzle(config.databaseUrl, {
   schema: {
     programIndexerState,
     programSetups,
@@ -28,8 +30,8 @@ export const db = drizzle(env.DATABASE_URL, {
 });
 
 export interface ProgramSetupRecord {
-  programId: string;
   idl: Idl;
+  programId: string;
 }
 
 const programSetupsTableName = getTableName(programSetups);
@@ -76,6 +78,15 @@ export const dropAllTablesSql = () =>
   END $$;
 `);
 
+export const ensureBaseTables = async () => {
+  await db.execute(createProgramSetupsTableSql());
+  await db.execute(createProgramIndexerStateTableSql());
+};
+
+export const resetDatabase = async () => {
+  await db.execute(dropAllTablesSql());
+};
+
 export const upsertProgramSetup = async ({ programId, idl }: ProgramSetupRecord) => {
   await db
     .insert(programSetups)
@@ -92,12 +103,11 @@ export const upsertProgramSetup = async ({ programId, idl }: ProgramSetupRecord)
     });
 };
 
-export const getProgramSetup = async (programId: string): Promise<ProgramSetupRecord | null> => {
+export const getStoredProgramSetup = async (): Promise<ProgramSetupRecord | null> => {
   const row = await db.query.programSetups.findFirst({
-    where: eq(programSetups.programId, programId),
     columns: {
-      programId: true,
       idl: true,
+      programId: true,
     },
   });
 
@@ -105,34 +115,12 @@ export const getProgramSetup = async (programId: string): Promise<ProgramSetupRe
     return null;
   }
 
-  return {
-    programId: row.programId,
-    idl: row.idl,
-  };
-};
-
-export const getConfiguredProgramSetup = async (): Promise<ProgramSetupRecord | null> => {
-  const row = await db.query.programSetups.findFirst({
-    orderBy: desc(programSetups.updatedAt),
-    columns: {
-      programId: true,
-      idl: true,
-    },
-  });
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    programId: row.programId,
-    idl: row.idl,
-  };
+  return row;
 };
 
 export const getLastProcessedSlot = async (programId: string): Promise<bigint | null> => {
   const row = await db.query.programIndexerState.findFirst({
-    where: eq(programIndexerState.programId, programId),
+    where: (table, { eq }) => eq(table.programId, programId),
     columns: {
       lastProcessedSlot: true,
     },

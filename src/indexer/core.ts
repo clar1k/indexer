@@ -1,16 +1,8 @@
 import { insertAccountRow, insertInstructionRow } from "@/db/idl.js";
-import {
-  db,
-  getConfiguredProgramSetup,
-  getLastProcessedSlot,
-  getProgramSetup,
-  upsertLastProcessedSlot,
-} from "@/db/index.js";
-import { buildAccountDiscriminatorMap, buildDiscriminatorMap, buildTypesMap } from "@/idl/index.js";
+import { db, getLastProcessedSlot, upsertLastProcessedSlot } from "@/db/index.js";
 import { extractWritableAccounts, fetchDecodedWritableAccounts } from "@/indexer/accounts.js";
 import {
   type CheckpointAndTip,
-  type CliOptions,
   type IndexerRuntime,
   type SignatureWithSlot,
   type SlotRangeOptions,
@@ -45,37 +37,6 @@ export const coreDeps = {
   insertInstructionRow,
   retryWithExponentialBackoff,
   upsertLastProcessedSlot,
-};
-
-export const loadConfiguredProgramId = async () => {
-  const setup = await getConfiguredProgramSetup();
-
-  if (!setup) {
-    throw new Error("No configured program setup found");
-  }
-
-  return address(setup.programId);
-};
-
-export const loadIndexerRuntime = async (programId: Address): Promise<IndexerRuntime> => {
-  const setup = await getProgramSetup(programId.toString());
-
-  if (!setup) {
-    throw new Error(`Missing program setup for ${programId.toString()}`);
-  }
-
-  const discriminatorMap = buildDiscriminatorMap(setup.idl);
-  const coder = new BorshCoder(setup.idl);
-  const accountDiscriminatorMap = buildAccountDiscriminatorMap(setup.idl);
-
-  return {
-    accountDiscriminatorMap,
-    coder,
-    discriminatorMap,
-    idl: setup.idl,
-    programId,
-    typesMap: buildTypesMap(setup.idl.types ?? []),
-  };
 };
 
 export const loadCheckpointAndTip = async (
@@ -209,7 +170,7 @@ export const processTransaction = async (
     loadedWritableCount: writableLoaded.length,
     staticAccountCount: staticKeys.length,
   });
-  
+
   const decodedAccounts = await fetchDecodedWritableAccounts({
     abortSignal,
     pubkeys: writableAccounts,
@@ -240,7 +201,11 @@ export const processTransaction = async (
   try {
     await coreDeps.db.transaction(async (tx) => {
       for (const instruction of filteredInstructions) {
-        const decoded = decodeInstruction(instruction.data, runtime.coder, runtime.discriminatorMap);
+        const decoded = decodeInstruction(
+          instruction.data,
+          runtime.coder,
+          runtime.discriminatorMap,
+        );
 
         if (!decoded) {
           logger.warn(
@@ -360,126 +325,6 @@ export const decodeInstruction = (
   if (!ixName) {
     return null;
   }
-  
+
   return coder.instruction.decode(buffer);
-};
-
-const parseSlotArg = (value: string | undefined, flagName: string): bigint | undefined => {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!/^\d+$/.test(value)) {
-    throw new Error(`Invalid ${flagName} value: ${value}`);
-  }
-
-  return BigInt(value);
-};
-
-const parseSignaturesArg = (value: string | undefined, flagName: string): Signature[] => {
-  if (value === undefined) {
-    throw new Error(`Missing ${flagName} value`);
-  }
-
-  const parsedSignatures = value
-    .split(",")
-    .map((signature) => signature.trim())
-    .filter((signature) => signature.length > 0);
-
-  if (parsedSignatures.length === 0) {
-    throw new Error(`Invalid ${flagName} value: ${value}`);
-  }
-
-  return parsedSignatures as Signature[];
-};
-
-export const parseCliOptions = (args = process.argv.slice(2)): CliOptions => {
-  let mode: CliOptions["mode"] = "realtime";
-  let slotFrom: bigint | undefined;
-  let slotTo: bigint | undefined;
-  const signatures: Signature[] = [];
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-
-    if (arg === "--") {
-      continue;
-    }
-
-    if (arg === "--mode") {
-      const value = args[index + 1];
-
-      if (value !== "backfill" && value !== "realtime") {
-        throw new Error(`Invalid --mode value: ${value}`);
-      }
-
-      mode = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--mode=")) {
-      const value = arg.slice("--mode=".length);
-
-      if (value !== "backfill" && value !== "realtime") {
-        throw new Error(`Invalid --mode value: ${value}`);
-      }
-
-      mode = value;
-      continue;
-    }
-
-    if (arg === "--slot-from") {
-      slotFrom = parseSlotArg(args[index + 1], "--slot-from");
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--slot-from=")) {
-      slotFrom = parseSlotArg(arg.slice("--slot-from=".length), "--slot-from");
-      continue;
-    }
-
-    if (arg === "--slot-to") {
-      slotTo = parseSlotArg(args[index + 1], "--slot-to");
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--slot-to=")) {
-      slotTo = parseSlotArg(arg.slice("--slot-to=".length), "--slot-to");
-      continue;
-    }
-
-    if (arg === "--signatures") {
-      signatures.push(...parseSignaturesArg(args[index + 1], "--signatures"));
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--signatures=")) {
-      signatures.push(...parseSignaturesArg(arg.slice("--signatures=".length), "--signatures"));
-      continue;
-    }
-
-    throw new Error(`Unknown argument: ${arg}`);
-  }
-
-  if (
-    mode === "realtime" &&
-    (slotFrom !== undefined || slotTo !== undefined || signatures.length > 0)
-  ) {
-    throw new Error("--slot-from, --slot-to, and --signatures are only supported in backfill mode");
-  }
-
-  if (signatures.length > 0 && (slotFrom !== undefined || slotTo !== undefined)) {
-    throw new Error("--signatures cannot be combined with --slot-from or --slot-to");
-  }
-
-  return {
-    mode,
-    signatures: signatures.length > 0 ? [...new Set(signatures)] : undefined,
-    slotFrom,
-    slotTo,
-  };
 };

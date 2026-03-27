@@ -1,7 +1,8 @@
-import { db, getConfiguredProgramSetup } from "@/db/index.js";
+import { db } from "@/db/index.js";
 import { buildTypesMap, mapType } from "@/idl/index.js";
 import type { TypeMap } from "@/idl/index.js";
 import { logger } from "@/logger.js";
+import { getRuntimeContext } from "@/runtime.js";
 import type { IdlInstruction, IdlType } from "@coral-xyz/anchor/dist/cjs/idl.js";
 import { sql, type SQL } from "drizzle-orm";
 import { toSnakeCase } from "drizzle-orm/casing";
@@ -57,11 +58,11 @@ const LIST_LIMIT_DEFAULT = 50;
 const LIST_LIMIT_MAX = 200;
 
 const getProgramContext = async () => {
-  const setup = await getConfiguredProgramSetup();
-
-  if (!setup) {
-    throw new HttpError(404, "No configured program setup found");
-  }
+  const runtimeContext = getRuntimeContext();
+  const setup = {
+    idl: runtimeContext.idl,
+    programId: runtimeContext.programId,
+  };
 
   const typesMap = buildTypesMap(setup.idl.types ?? []);
   const instructions = new Map<string, InstructionMetadata>();

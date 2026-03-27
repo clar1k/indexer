@@ -1,7 +1,7 @@
 import type { TypeMap } from "@/idl/index.js";
 import { rpc } from "@/solana/index.js";
 import type { BorshCoder, Idl } from "@coral-xyz/anchor";
-import type { Address, Signature } from "@solana/kit";
+import type { Address } from "@solana/kit";
 
 type IndexerRpc = typeof rpc;
 
@@ -19,18 +19,9 @@ export type SlotRangeOptions = {
   slotTo?: bigint;
 };
 
-export type SignatureListOptions = {
-  signatures?: Signature[];
-};
-
-export type CliOptions = SlotRangeOptions &
-  SignatureListOptions & {
-    mode: "backfill" | "realtime";
-  };
-
 export type CheckpointAndTip = {
-  latestProcessedSlot: bigint;
   currentSlot: bigint;
+  latestProcessedSlot: bigint;
 };
 
 export type SignatureWithSlot = Awaited<

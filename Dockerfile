@@ -12,4 +12,4 @@ COPY src ./src
 COPY idl.json ./idl.json
 COPY dflow-idl.json ./dflow-idl.json
 
-CMD ["pnpm", "start:api"]
+CMD ["pnpm", "start"]

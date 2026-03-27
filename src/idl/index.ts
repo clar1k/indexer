@@ -5,8 +5,19 @@ import type { IdlTypeDef, IdlType, Idl } from "@coral-xyz/anchor/dist/cjs/idl.js
 import { createHash } from "crypto";
 
 export const parseIdl = (args: { filePath: string }) => {
-  const rawIdl = fs.readFileSync(args.filePath, "utf-8");
-  return JSON.parse(rawIdl);
+  let rawIdl: string;
+
+  try {
+    rawIdl = fs.readFileSync(args.filePath, "utf-8");
+  } catch (error) {
+    throw new Error(`Failed to read IDL at ${args.filePath}: ${String(error)}`);
+  }
+
+  try {
+    return JSON.parse(rawIdl) as Idl;
+  } catch (error) {
+    throw new Error(`Failed to parse IDL JSON at ${args.filePath}: ${String(error)}`);
+  }
 };
 
 interface ColumnDefinition {

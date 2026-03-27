@@ -1,18 +1,13 @@
 {
   "name": "indexer",
   "type": "module",
-  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "indexer:test": "tsx src/indexer/index.ts",
-    "setup": "tsx src/setup.ts",
     "dev": "tsx watch src/main.ts",
     "build": "tsc",
     "start": "tsx src/main.ts",
-    "start:api": "tsx src/main.ts",
-    "start:indexer": "tsx src/indexer/index.ts",
-    "start:setup": "tsx src/setup.ts",
     "fmt": "oxfmt",
-    "test": "node --import tsx --test test/**/*.test.ts src/**/*.test.ts"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -40,6 +35,8 @@
     "drizzle-kit": "^0.31.10",
     "oxfmt": "^0.42.0",
     "tsx": "^4.7.1",
-    "typescript": "^5.8.3"
-  }
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.2"
+  },
+  "packageManager": "pnpm@10.33.0"
 }

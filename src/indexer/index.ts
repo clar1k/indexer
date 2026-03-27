@@ -1,90 +1,63 @@
-import {
-  loadCheckpointAndTip,
-  loadConfiguredProgramId,
-  loadIndexerRuntime,
-  parseCliOptions,
-} from "@/indexer/core.js";
-import type { CliOptions } from "@/indexer/types.js";
+import type { BackfillConfig, RealtimeConfig } from "@/env.js";
+import { loadCheckpointAndTip } from "@/indexer/core.js";
+import { runBackfill } from "@/indexer/backfill.js";
+import type { IndexerRuntime } from "@/indexer/types.js";
 import { logger } from "@/logger.js";
 import { runRealtime } from "@/indexer/realtime.js";
+import type { Signature } from "@solana/kit";
 
-export const startIndexer = async (cliOptions: CliOptions) => {
-  const abortController = new AbortController();
-  let shuttingDown = false;
+export const startIndexer = async ({
+  abortSignal,
+  config,
+  runtime,
+}: {
+  abortSignal: AbortSignal;
+  config: BackfillConfig | RealtimeConfig;
+  runtime: IndexerRuntime;
+}) => {
+  const programId = runtime.programId;
+  logger.info({ mode: config.indexerMode, programId: programId.toString() }, "Indexer starting");
 
-  const shutdown = () => {
-    if (shuttingDown) {
-      return;
+  if (config.indexerMode === "backfill") {
+    if (config.backfill.kind === "signatures") {
+      await runBackfill({
+        abortSignal,
+        programId,
+        runtime,
+        signatures: config.backfill.signatures as Signature[],
+      });
+    } else {
+      await runBackfill({
+        abortSignal,
+        fromExclusive: config.backfill.slotFrom,
+        programId,
+        runtime,
+        toInclusive: config.backfill.slotTo,
+      });
     }
 
-    shuttingDown = true;
-    logger.info("Shutting down indexer");
-    abortController.abort();
-  };
-
-  process.once("SIGINT", shutdown);
-  process.once("SIGTERM", shutdown);
-
-  const programId = await loadConfiguredProgramId();
-  const runtime = await loadIndexerRuntime(programId);
-  logger.info({ mode: cliOptions.mode, programId: programId.toString() }, "Indexer starting");
-
-  try {
-    if (cliOptions.mode === "backfill") {
-      const { runBackfill } = await import("@/indexer/backfill.js");
-
-      if (cliOptions.signatures) {
-        await runBackfill({
-          abortSignal: abortController.signal,
-          programId,
-          runtime,
-          signatures: cliOptions.signatures,
-        });
-      } else {
-        const { latestProcessedSlot, currentSlot } = await loadCheckpointAndTip(
-          programId,
-          { slotFrom: cliOptions.slotFrom, slotTo: cliOptions.slotTo },
-          abortController.signal,
-        );
-
-        await runBackfill({
-          abortSignal: abortController.signal,
-          fromExclusive: latestProcessedSlot,
-          programId,
-          runtime,
-          toInclusive: currentSlot,
-        });
-      }
-
-      return;
-    }
-
-    await runRealtime({
-      abortSignal: abortController.signal,
-      programId,
-      runtime,
-    });
-  } finally {
-    process.off("SIGINT", shutdown);
-    process.off("SIGTERM", shutdown);
-  }
-};
-
-const shouldRunAsScript = () => {
-  const entrypoint = process.argv[1];
-
-  if (!entrypoint) {
-    return false;
+    logger.info({ programId: programId.toString() }, "Backfill job finished");
+    return;
   }
 
-  return import.meta.url === new URL(entrypoint, "file:").href;
-};
+  const { latestProcessedSlot, currentSlot } = await loadCheckpointAndTip(
+    programId,
+    {},
+    abortSignal,
+  );
 
-if (shouldRunAsScript()) {
-  const cliOptions = parseCliOptions();
+  logger.info(
+    {
+      currentSlot: currentSlot.toString(),
+      latestProcessedSlot: latestProcessedSlot.toString(),
+      programId: programId.toString(),
+    },
+    "Indexer ready: realtime catch-up starting",
+  );
 
-  startIndexer(cliOptions).catch((error) => {
-    logger.error({ err: error, mode: cliOptions.mode }, "Indexer process failed");
-    process.exitCode = 1;
+  await runRealtime({
+    abortSignal,
+    programId,
+    runtime,
   });
-}
+};

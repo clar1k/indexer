@@ -1,4 +1,4 @@
-import { env } from "@/env.js";
+import { getConfig } from "@/env.js";
 import { logger } from "@/logger.js";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 
@@ -6,8 +6,10 @@ const RETRY_BASE_DELAY_MS = 250;
 const RETRY_MAX_DELAY_MS = 4_000;
 const RETRY_MAX_ATTEMPTS = 5;
 
-export const rpc = createSolanaRpc(env.RPC_URL);
-export const rpcSubscriptions = createSolanaRpcSubscriptions(env.WS_URL);
+const config = getConfig();
+
+export const rpc = createSolanaRpc(config.rpcUrl);
+export const rpcSubscriptions = createSolanaRpcSubscriptions(config.wsUrl);
 
 const isAbortError = (error: unknown) =>
   error instanceof Error &&
