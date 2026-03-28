@@ -34,7 +34,7 @@ The repository was built around the following requirements:
 
 At a high level the application starts by loading configuration and parsing the Anchor IDL, then synchronizes the database schema with that IDL, and finally runs the API, the indexer, or both depending on configuration.
 
-<img src="static/indexer-schema.png" alt="Indexer architecture" width="720" />
+<img src="static/indexer-schema.png" alt="Indexer architecture" width="320" />
 
 ### Main components
 
