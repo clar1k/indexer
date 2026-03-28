@@ -26,6 +26,54 @@ const closeServer = (server: ApiServer) =>
     });
   });
 
+const waitForShutdownSignal = ({
+  abortController,
+  server,
+}: {
+  abortController?: AbortController;
+  server?: ApiServer;
+}) =>
+  new Promise<void>((resolve) => {
+    let finished = false;
+
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      process.off("SIGINT", handleSigint);
+      process.off("SIGTERM", handleSigterm);
+      resolve();
+    };
+
+    const shutdown = (signal: string) => {
+      if (finished) {
+        return;
+      }
+
+      logger.info({ signal }, "Shutdown requested");
+      abortController?.abort(new Error(`Received ${signal}`));
+
+      if (!server) {
+        finish();
+        return;
+      }
+
+      closeServer(server)
+        .catch((error) => {
+          logger.error({ err: error }, "Failed to close API server cleanly");
+        })
+        .finally(finish);
+    };
+
+    const handleSigint = () => shutdown("SIGINT");
+    const handleSigterm = () => shutdown("SIGTERM");
+
+    process.once("SIGINT", handleSigint);
+    process.once("SIGTERM", handleSigterm);
+  });
+
 export const bootstrapApplication = async () => {
   logger.info("Startup phase: loading config");
   const config = getConfig();
@@ -70,42 +118,34 @@ export const bootstrapApplication = async () => {
 
   if (!config.indexerEnabled) {
     logger.info({ port: config.appPort }, "Startup phase: starting API");
-    startApiServer({ port: config.appPort });
+    const server = startApiServer({ port: config.appPort });
     logger.info("Startup phase: indexer disabled");
+    await waitForShutdownSignal({ server });
     return;
   }
 
   if (config.indexerMode === "backfill") {
+    const abortController = new AbortController();
+    const signalWatcher = waitForShutdownSignal({ abortController });
+
     logger.info({ mode: config.indexerMode }, "Startup phase: starting indexer");
-    await startIndexer({
-      abortSignal: new AbortController().signal,
-      config,
-      runtime: runtimeContext.indexerRuntime,
-    });
+    try {
+      await startIndexer({
+        abortSignal: abortController.signal,
+        config,
+        runtime: runtimeContext.indexerRuntime,
+      });
+    } finally {
+      abortController.abort(new Error("Backfill finished"));
+      void signalWatcher;
+    }
     return;
   }
 
   logger.info({ port: config.appPort }, "Startup phase: starting API");
   const server = startApiServer({ port: config.appPort });
   const abortController = new AbortController();
-  let shuttingDown = false;
-
-  const shutdown = (signal: string) => {
-    if (shuttingDown) {
-      return;
-    }
-
-    shuttingDown = true;
-    logger.info({ signal }, "Shutdown requested");
-    abortController.abort(new Error(`Received ${signal}`));
-    server.close();
-  };
-
-  const handleSigint = () => shutdown("SIGINT");
-  const handleSigterm = () => shutdown("SIGTERM");
-
-  process.once("SIGINT", handleSigint);
-  process.once("SIGTERM", handleSigterm);
+  void waitForShutdownSignal({ abortController });
 
   try {
     logger.info({ mode: config.indexerMode }, "Startup phase: starting indexer");
@@ -115,8 +155,7 @@ export const bootstrapApplication = async () => {
       runtime: runtimeContext.indexerRuntime,
     });
   } finally {
-    process.off("SIGINT", handleSigint);
-    process.off("SIGTERM", handleSigterm);
+    abortController.abort(new Error("Realtime loop finished"));
     await closeServer(server).catch((error) => {
       logger.error({ err: error }, "Failed to close API server cleanly");
     });

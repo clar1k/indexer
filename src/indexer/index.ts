@@ -29,7 +29,7 @@ export const startIndexer = async ({
     } else {
       await runBackfill({
         abortSignal,
-        fromExclusive: config.backfill.slotFrom,
+        fromExclusive: config.backfill.slotFrom - 1n,
         programId,
         runtime,
         toInclusive: config.backfill.slotTo,
