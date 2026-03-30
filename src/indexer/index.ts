@@ -26,6 +26,14 @@ export const startIndexer = async ({
         runtime,
         signatures: config.backfill.signatures as Signature[],
       });
+    } else if (config.backfill.kind === "signature-range") {
+      await runBackfill({
+        abortSignal,
+        before: config.backfill.before as Signature,
+        programId,
+        runtime,
+        until: config.backfill.until as Signature,
+      });
     } else {
       await runBackfill({
         abortSignal,

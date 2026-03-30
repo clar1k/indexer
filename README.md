@@ -6,7 +6,7 @@ The repository was built around the following requirements:
 
 - Dynamic schema generation from Anchor IDL
 - Decoding of both instructions and account states
-- Batch backfill by slot range or explicit signatures
+- Batch backfill by slot range, signature range, or explicit signatures
 - Realtime indexing with cold start catch-up
 - Reliability features such as retries, exponential backoff, and graceful shutdown
 - Docker-based local setup
@@ -21,7 +21,7 @@ The repository was built around the following requirements:
 - Persists per-program checkpoint state in Postgres
 - Supports two indexing modes:
   - `realtime`: catch up from the last processed slot, then subscribe to live logs
-  - `backfill`: process a slot range or a fixed list of signatures
+  - `backfill`: process a slot range, a signature range, or a fixed list of signatures
 - Retries RPC operations with exponential backoff
 - Uses transactional writes so decoded instructions, decoded accounts, and checkpoint updates commit together
 - Exposes HTTP endpoints for:
@@ -140,10 +140,12 @@ This avoids the common gap where an indexer starts listening live before it has 
 
 ### Backfill mode
 
-Backfill mode supports two strategies:
+Backfill mode supports three strategies:
 
 - Slot range
   - process all matching signatures between `BACKFILL_SLOT_FROM` and `BACKFILL_SLOT_TO`
+- Signature range
+  - process all matching signatures returned by `getSignaturesForAddress` between `BACKFILL_SIGNATURE_BEFORE` and `BACKFILL_SIGNATURE_UNTIL`
 - Explicit signatures
   - process a comma-separated list via `BACKFILL_SIGNATURES`
 
@@ -281,6 +283,8 @@ The application is configured entirely through environment variables.
 | `WS_URL`              | Yes         | Solana WebSocket endpoint                                   |
 | `INDEXER_ENABLED`     | Yes         | `true` to run indexing, `false` for API-only mode           |
 | `INDEXER_MODE`        | Conditional | `realtime` or `backfill` when `INDEXER_ENABLED=true`        |
+| `BACKFILL_SIGNATURE_BEFORE` | Conditional | Newer signature boundary for signature-range backfill |
+| `BACKFILL_SIGNATURE_UNTIL` | Conditional | Older signature boundary for signature-range backfill |
 | `BACKFILL_SLOT_FROM`  | Conditional | Inclusive lower bound for slot-range backfill configuration |
 | `BACKFILL_SLOT_TO`    | Conditional | Inclusive upper bound for slot-range backfill configuration |
 | `BACKFILL_SIGNATURES` | Conditional | Comma-separated signatures for targeted backfill            |
@@ -322,6 +326,20 @@ INDEXER_ENABLED=true
 INDEXER_MODE=backfill
 BACKFILL_SLOT_FROM=320000000
 BACKFILL_SLOT_TO=320100000
+```
+
+#### Backfill by signature range
+
+```env
+APP_PORT=3000
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/indexer
+PROGRAM_IDL_PATH=./idl.json
+RPC_URL=https://your-rpc-endpoint
+WS_URL=wss://your-ws-endpoint
+INDEXER_ENABLED=true
+INDEXER_MODE=backfill
+BACKFILL_SIGNATURE_BEFORE=newerBoundarySignature
+BACKFILL_SIGNATURE_UNTIL=olderBoundarySignature
 ```
 
 #### Backfill by signatures

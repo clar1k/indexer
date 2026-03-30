@@ -24,8 +24,10 @@ export const coreDeps = {
   db,
   getCurrentSlot: () => rpc.getSlot().send(),
   getLastProcessedSlot,
-  getSignaturesForAddressPage: (programId: Address, before?: Signature) =>
-    rpc.getSignaturesForAddress(programId, before ? { before } : undefined).send(),
+  getSignaturesForAddressPage: (
+    programId: Address,
+    options?: { before?: Signature; until?: Signature },
+  ) => rpc.getSignaturesForAddress(programId, options).send(),
   getTransaction: (signature: Signature) =>
     rpc
       .getTransaction(signature, {
@@ -85,7 +87,7 @@ export const getSignaturesToProcess = async ({
 
     const page = await coreDeps.retryWithExponentialBackoff(
       "getSignaturesForAddress",
-      () => coreDeps.getSignaturesForAddressPage(programId, before),
+      () => coreDeps.getSignaturesForAddressPage(programId, before ? { before } : undefined),
       abortSignal,
     );
 
@@ -106,6 +108,48 @@ export const getSignaturesToProcess = async ({
     }
 
     before = page[page.length - 1]?.signature;
+  }
+
+  return signatures.reverse();
+};
+
+export const getSignatureRangeToProcess = async ({
+  abortSignal,
+  before,
+  programId,
+  until,
+}: {
+  abortSignal?: AbortSignal;
+  before: Signature;
+  programId: Address;
+  until: Signature;
+}) => {
+  const signatures: SignatureWithSlot[] = [];
+  let pageBefore: Signature | undefined = before;
+
+  while (true) {
+    throwIfAborted(abortSignal);
+
+    const page = await coreDeps.retryWithExponentialBackoff(
+      "getSignaturesForAddress",
+      () =>
+        coreDeps.getSignaturesForAddressPage(programId, {
+          before: pageBefore,
+          until,
+        }),
+      abortSignal,
+    );
+
+    if (page.length === 0) {
+      break;
+    }
+
+    signatures.push(...page);
+    pageBefore = page[page.length - 1]?.signature;
+
+    if (!pageBefore || page.some((signatureWithSlot) => signatureWithSlot.signature === until)) {
+      break;
+    }
   }
 
   return signatures.reverse();

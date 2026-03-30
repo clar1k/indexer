@@ -51,7 +51,9 @@ const parseSignatureList = (value: string) => {
 
 const rawEnvSchema = z.object({
   APP_PORT: z.string().min(1),
+  BACKFILL_SIGNATURE_BEFORE: z.preprocess(emptyToUndefined, z.string().optional()),
   BACKFILL_SIGNATURES: z.preprocess(emptyToUndefined, z.string().optional()),
+  BACKFILL_SIGNATURE_UNTIL: z.preprocess(emptyToUndefined, z.string().optional()),
   BACKFILL_SLOT_FROM: z.preprocess(emptyToUndefined, z.string().optional()),
   BACKFILL_SLOT_TO: z.preprocess(emptyToUndefined, z.string().optional()),
   DATABASE_URL: z.url(),
@@ -84,6 +86,11 @@ export type RealtimeConfig = {
 export type BackfillConfig = {
   appPort: number;
   backfill:
+    | {
+        before: string;
+        kind: "signature-range";
+        until: string;
+      }
     | {
         kind: "signatures";
         signatures: string[];
@@ -129,9 +136,11 @@ export const loadConfig = (source: NodeJS.ProcessEnv = process.env): AppConfig =
   if (!indexerEnabled) {
     if (
       env.INDEXER_MODE !== undefined ||
+      env.BACKFILL_SIGNATURE_BEFORE !== undefined ||
       env.BACKFILL_SLOT_FROM !== undefined ||
       env.BACKFILL_SLOT_TO !== undefined ||
-      env.BACKFILL_SIGNATURES !== undefined
+      env.BACKFILL_SIGNATURES !== undefined ||
+      env.BACKFILL_SIGNATURE_UNTIL !== undefined
     ) {
       throw new Error(
         "INDEXER_MODE and BACKFILL_* variables are invalid when INDEXER_ENABLED=false",
@@ -152,12 +161,14 @@ export const loadConfig = (source: NodeJS.ProcessEnv = process.env): AppConfig =
 
   if (env.INDEXER_MODE === "realtime") {
     if (
+      env.BACKFILL_SIGNATURE_BEFORE !== undefined ||
       env.BACKFILL_SLOT_FROM !== undefined ||
       env.BACKFILL_SLOT_TO !== undefined ||
-      env.BACKFILL_SIGNATURES !== undefined
+      env.BACKFILL_SIGNATURES !== undefined ||
+      env.BACKFILL_SIGNATURE_UNTIL !== undefined
     ) {
       throw new Error(
-        "BACKFILL_SLOT_FROM, BACKFILL_SLOT_TO, and BACKFILL_SIGNATURES are invalid when INDEXER_MODE=realtime",
+        "BACKFILL_SLOT_FROM, BACKFILL_SLOT_TO, BACKFILL_SIGNATURE_BEFORE, BACKFILL_SIGNATURE_UNTIL, and BACKFILL_SIGNATURES are invalid when INDEXER_MODE=realtime",
       );
     }
 
@@ -168,20 +179,44 @@ export const loadConfig = (source: NodeJS.ProcessEnv = process.env): AppConfig =
     };
   }
 
+  const hasSignatureBefore = env.BACKFILL_SIGNATURE_BEFORE !== undefined;
   const hasSlotFrom = env.BACKFILL_SLOT_FROM !== undefined;
   const hasSlotTo = env.BACKFILL_SLOT_TO !== undefined;
   const hasSignatures = env.BACKFILL_SIGNATURES !== undefined;
+  const hasSignatureUntil = env.BACKFILL_SIGNATURE_UNTIL !== undefined;
+  const hasSignatureRange = hasSignatureBefore || hasSignatureUntil;
 
-  if (hasSignatures && (hasSlotFrom || hasSlotTo)) {
+  if (
+    Number(hasSignatureRange) + Number(hasSignatures) + Number(hasSlotFrom || hasSlotTo) > 1
+  ) {
     throw new Error(
-      "BACKFILL_SIGNATURES cannot be combined with BACKFILL_SLOT_FROM or BACKFILL_SLOT_TO",
+      "Choose exactly one backfill mode: BACKFILL_SIGNATURE_BEFORE/BACKFILL_SIGNATURE_UNTIL, BACKFILL_SIGNATURES, or BACKFILL_SLOT_FROM/BACKFILL_SLOT_TO",
     );
   }
 
-  if (!hasSignatures && !(hasSlotFrom && hasSlotTo)) {
+  if (hasSignatureRange && !(hasSignatureBefore && hasSignatureUntil)) {
     throw new Error(
-      "INDEXER_MODE=backfill requires either BACKFILL_SIGNATURES or both BACKFILL_SLOT_FROM and BACKFILL_SLOT_TO",
+      "BACKFILL_SIGNATURE_BEFORE and BACKFILL_SIGNATURE_UNTIL must be provided together",
     );
+  }
+
+  if (!hasSignatureRange && !hasSignatures && !(hasSlotFrom && hasSlotTo)) {
+    throw new Error(
+      "INDEXER_MODE=backfill requires BACKFILL_SIGNATURE_BEFORE/BACKFILL_SIGNATURE_UNTIL, BACKFILL_SIGNATURES, or both BACKFILL_SLOT_FROM and BACKFILL_SLOT_TO",
+    );
+  }
+
+  if (hasSignatureRange) {
+    return {
+      ...baseConfig,
+      backfill: {
+        before: env.BACKFILL_SIGNATURE_BEFORE ?? "",
+        kind: "signature-range",
+        until: env.BACKFILL_SIGNATURE_UNTIL ?? "",
+      },
+      indexerEnabled: true,
+      indexerMode: "backfill",
+    };
   }
 
   if (hasSignatures) {
