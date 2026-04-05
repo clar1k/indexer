@@ -11,7 +11,7 @@ The repository was built around the following requirements:
 - Reliability features such as retries, exponential backoff, and graceful shutdown
 - Docker-based local setup
 - Structured logging and environment-based configuration
-
+fea
 ## Features
 
 - Parses an Anchor IDL at startup and derives the target program id from the IDL itself
@@ -365,7 +365,13 @@ BACKFILL_SIGNATURES=sig1,sig2,sig3
 
 ### 1. Create a local env file
 
-The repository does not include an `.env.example`, so create `.env` manually:
+The repository includes an `.env.example`. Copy it to `.env` and fill in your RPC endpoints:
+
+```bash
+cp .env.example .env
+```
+
+Then update `.env` as needed:
 
 ```env
 APP_PORT=3000
@@ -376,7 +382,7 @@ INDEXER_MODE=realtime
 PROGRAM_IDL_PATH=/app/idl.json
 ```
 
-`DATABASE_URL` is injected by `docker-compose.yml` and points at the bundled Postgres container.
+`DATABASE_URL` is injected by `docker-compose.yml` and points at the bundled Postgres container, so it does not need to be set in `.env` for Docker Compose usage.
 
 ### 2. Start the stack
 
@@ -398,10 +404,10 @@ The app container then:
 
 ### 3. Use a different IDL
 
-The image already includes both `idl.json` and `dflow-idl.json`. To use the alternative IDL:
+The image includes `idl.json` by default. To use a different Anchor IDL, mount or copy your file into the container and point `PROGRAM_IDL_PATH` at it. For example:
 
 ```env
-PROGRAM_IDL_PATH=/app/dflow-idl.json
+PROGRAM_IDL_PATH=/app/idl.json
 ```
 
 ## Local Development
